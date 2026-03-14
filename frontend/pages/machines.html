@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Plant Status | VSP Smart Portal</title>
+<link rel="stylesheet" href="../css/style.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/feather-icons"></script>
+<style>
+.summary-bar { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+.sum-card { background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:14px 20px; text-align:center; min-width:110px; }
+.sum-val { font-family:'Rajdhani',sans-serif; font-size:2rem; font-weight:700; line-height:1; }
+.sum-lbl { font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-top:4px; }
+.machine-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:14px; }
+.machine-card {
+  background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg);
+  padding:16px; transition:all 0.2s;
+}
+.machine-card:hover { border-color:var(--border-light); transform:translateY(-1px); }
+.mc-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
+.mc-code { font-size:0.72rem; color:var(--text-muted); font-family:'Rajdhani',sans-serif; letter-spacing:1px; }
+.mc-name { font-weight:700; font-size:0.95rem; margin-bottom:2px; }
+.mc-dept { font-size:0.78rem; color:var(--text-secondary); }
+.mc-row  { display:flex; justify-content:space-between; font-size:0.8rem; padding:4px 0; border-bottom:1px solid var(--border); }
+.mc-row:last-child { border-bottom:none; }
+.mc-key { color:var(--text-muted); }
+.mc-val { color:var(--text-primary); font-weight:500; }
+.mc-actions { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+.status-select { font-size:0.8rem; padding:6px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg-surface); color:var(--text-primary); cursor:pointer; }
+</style>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">⚙</div>
+    <div><div class="logo-title">VSP Portal</div><div class="logo-sub">RINL Vizag Steel</div></div>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="/" class="nav-item"><i data-feather="grid"></i><span>Dashboard</span></a>
+    <a href="/pages/map.html" class="nav-item"><i data-feather="map-pin"></i><span>Township Map</span></a>
+    <a href="/pages/machines.html" class="nav-item active"><i data-feather="cpu"></i><span>Plant Status</span></a>
+    <a href="/pages/lostfound.html" class="nav-item"><i data-feather="search"></i><span>Lost & Found</span></a>
+    <a href="/pages/accident.html" class="nav-item"><i data-feather="alert-triangle"></i><span>Accident Report</span></a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-time" id="clock">--:--:--</div>
+    <div class="sidebar-date" id="dateline"></div>
+  </div>
+</aside>
+
+<main class="main-content">
+  <header class="topbar">
+    <button class="menu-toggle" onclick="toggleSidebar()"><i data-feather="menu"></i></button>
+    <h1 class="page-title">Plant & Machine Status</h1>
+    <div class="topbar-right">
+      <button class="btn btn-ghost" onclick="loadMachines()" style="font-size:0.82rem;padding:7px 14px">
+        <i data-feather="refresh-cw"></i> Refresh
+      </button>
+    </div>
+  </header>
+
+  <div class="section" style="padding-top:20px">
+
+    <!-- Summary -->
+    <div class="summary-bar" id="summary-bar">
+      <div class="loading-msg">Loading summary...</div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters" style="margin-bottom:16px">
+      <button class="filter-btn active" onclick="filterStatus('ALL',this)">All</button>
+      <button class="filter-btn" onclick="filterStatus('RUNNING',this)">🟢 Running</button>
+      <button class="filter-btn" onclick="filterStatus('IDLE',this)">🟡 Idle</button>
+      <button class="filter-btn" onclick="filterStatus('MAINTENANCE',this)">🔵 Maintenance</button>
+      <button class="filter-btn" onclick="filterStatus('BREAKDOWN',this)">🔴 Breakdown</button>
+      <button class="filter-btn" onclick="filterStatus('OFFLINE',this)">⚫ Offline</button>
+      <input type="text" class="filter-btn search-input" placeholder="Search machine..." id="machine-search" oninput="searchMachines(this.value)" style="border-radius:20px"/>
+    </div>
+
+    <!-- Machine Grid -->
+    <div class="machine-grid" id="machine-grid">
+      <div class="loading-msg">Loading machines...</div>
+    </div>
+
+  </div>
+
+  <footer class="footer">VSP Smart Portal | RINL Vizag Steel | Internal Use Only</footer>
+</main>
+
+<!-- Update Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Update Machine</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>New Status</label>
+      <select id="modal-status">
+        <option>RUNNING</option>
+        <option>IDLE</option>
+        <option>MAINTENANCE</option>
+        <option>BREAKDOWN</option>
+        <option>OFFLINE</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>Operator Name</label>
+      <input type="text" id="modal-operator" placeholder="Operator name"/>
+    </div>
+    <div class="form-group" style="margin-bottom:18px">
+      <label>Notes</label>
+      <textarea id="modal-notes" placeholder="Reason for status change..."></textarea>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitUpdate()"><i data-feather="save"></i> Update</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/api.js"></script>
+<script src="../js/app.js"></script>
+<script>
+feather.replace();
+
+let allMachines = [];
+let currentFilter = 'ALL';
+let editingId = null;
+
+async function loadMachines() {
+  try {
+    const [mRes, sRes] = await Promise.all([API.getMachines(), API.getMachineSummary()]);
+    allMachines = mRes.data;
+    renderSummary(sRes);
+    renderGrid(allMachines);
+  } catch (e) {
+    showToast('Failed to load machine data', 'error');
+  }
+}
+
+function renderSummary(s) {
+  const colors = { RUNNING:'#10b981', IDLE:'#eab308', MAINTENANCE:'#3b82f6', BREAKDOWN:'#ef4444', OFFLINE:'#64748b' };
+  const el = document.getElementById('summary-bar');
+  const total = Object.values(s).reduce((a, b) => a + b, 0);
+  el.innerHTML = `
+    <div class="sum-card">
+      <div class="sum-val" style="color:#e8edf5">${total}</div>
+      <div class="sum-lbl">Total</div>
+    </div>
+    ${Object.entries(s).map(([k,v]) => `
+      <div class="sum-card" onclick="filterStatus('${k}', null)" style="cursor:pointer">
+        <div class="sum-val" style="color:${colors[k]||'#8b95a8'}">${v}</div>
+        <div class="sum-lbl">${k}</div>
+      </div>
+    `).join('')}
+  `;
+}
+
+function renderGrid(machines) {
+  const el = document.getElementById('machine-grid');
+  if (!machines.length) {
+    el.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><i data-feather="cpu"></i><h4>No machines found</h4></div>`;
+    feather.replace();
+    return;
+  }
+  el.innerHTML = machines.map(m => `
+    <div class="machine-card">
+      <div class="mc-header">
+        <div>
+          <div class="mc-code">${m.machine_code}</div>
+          <div class="mc-name">${m.machine_name}</div>
+          <div class="mc-dept">${m.department || '—'} · ${m.location_name || '—'}</div>
+        </div>
+        <div>${statusPill(m.status)}</div>
+      </div>
+      <div class="mc-row"><span class="mc-key">Capacity</span><span class="mc-val">${m.capacity_tph ? m.capacity_tph + ' TPH' : '—'}</span></div>
+      <div class="mc-row"><span class="mc-key">Operator</span><span class="mc-val">${m.operator_name || '—'}</span></div>
+      <div class="mc-row"><span class="mc-key">Last Maint.</span><span class="mc-val">${formatDate(m.last_maintenance)}</span></div>
+      <div class="mc-row"><span class="mc-key">Next Maint.</span><span class="mc-val">${formatDate(m.next_maintenance)}</span></div>
+      ${m.notes ? `<div class="mc-row"><span class="mc-key">Notes</span><span class="mc-val" style="text-align:right;max-width:200px;font-size:0.78rem">${m.notes}</span></div>` : ''}
+      <div class="mc-actions">
+        <button class="btn btn-ghost" style="font-size:0.78rem;padding:6px 12px" onclick="openModal(${m.id},'${m.machine_name.replace(/'/,"\\'")}','${m.status}','${m.operator_name||''}')">
+          <i data-feather="edit-2"></i> Update Status
+        </button>
+      </div>
+    </div>
+  `).join('');
+  feather.replace();
+}
+
+function filterStatus(status, btn) {
+  currentFilter = status;
+  document.querySelectorAll('.filters .filter-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const f = status === 'ALL' ? allMachines : allMachines.filter(m => m.status === status);
+  renderGrid(f);
+}
+
+function searchMachines(q) {
+  const term = q.toLowerCase();
+  const f = allMachines.filter(m =>
+    m.machine_name.toLowerCase().includes(term) ||
+    (m.department || '').toLowerCase().includes(term) ||
+    m.machine_code.toLowerCase().includes(term)
+  );
+  renderGrid(f);
+}
+
+function openModal(id, name, status, operator) {
+  editingId = id;
+  document.getElementById('modal-title').textContent = name;
+  document.getElementById('modal-status').value = status;
+  document.getElementById('modal-operator').value = operator;
+  document.getElementById('modal-notes').value = '';
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+  editingId = null;
+}
+
+async function submitUpdate() {
+  if (!editingId) return;
+  const data = {
+    status:        document.getElementById('modal-status').value,
+    operator_name: document.getElementById('modal-operator').value,
+    notes:         document.getElementById('modal-notes').value,
+  };
+  try {
+    await API.updateMachine(editingId, data);
+    showToast('Machine status updated!', 'success');
+    closeModal();
+    loadMachines();
+  } catch (e) {
+    showToast('Update failed: ' + e.message, 'error');
+  }
+}
+
+loadMachines();
+setInterval(loadMachines, 60000); // auto-refresh every 60s
+</script>
+</body>
+</html>

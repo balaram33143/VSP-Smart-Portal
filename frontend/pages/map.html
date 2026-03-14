@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Township Map | VSP Smart Portal</title>
+<link rel="stylesheet" href="../css/style.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/feather-icons"></script>
+<!-- Leaflet (free, no API key) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  #map { height: 500px; }
+  .leaflet-popup-content-wrapper {
+    background: #1c2230; color: #e8edf5; border: 1px solid #2a3444; border-radius: 10px;
+  }
+  .leaflet-popup-tip { background: #1c2230; }
+  .leaflet-popup-content { font-family: Inter, sans-serif; font-size: 0.88rem; }
+  .popup-name { font-weight: 700; font-size: 1rem; margin-bottom: 4px; color: #f59e0b; }
+  .popup-cat  { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: #8b95a8; }
+  .popup-desc { margin-top: 6px; color: #c8d0de; font-size: 0.83rem; }
+  .split-layout { display: grid; grid-template-columns: 1fr 340px; gap: 20px; }
+  @media (max-width: 900px) { .split-layout { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">⚙</div>
+    <div><div class="logo-title">VSP Portal</div><div class="logo-sub">RINL Vizag Steel</div></div>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="/" class="nav-item"><i data-feather="grid"></i><span>Dashboard</span></a>
+    <a href="/pages/map.html" class="nav-item active"><i data-feather="map-pin"></i><span>Township Map</span></a>
+    <a href="/pages/machines.html" class="nav-item"><i data-feather="cpu"></i><span>Plant Status</span></a>
+    <a href="/pages/lostfound.html" class="nav-item"><i data-feather="search"></i><span>Lost & Found</span></a>
+    <a href="/pages/accident.html" class="nav-item"><i data-feather="alert-triangle"></i><span>Accident Report</span></a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-time" id="clock">--:--:--</div>
+    <div class="sidebar-date" id="dateline"></div>
+  </div>
+</aside>
+
+<main class="main-content">
+  <header class="topbar">
+    <button class="menu-toggle" onclick="toggleSidebar()"><i data-feather="menu"></i></button>
+    <h1 class="page-title">Township Map</h1>
+    <div class="topbar-right">
+      <span id="loc-count" style="font-size:0.82rem;color:var(--text-muted)">Loading...</span>
+    </div>
+  </header>
+
+  <div class="section" style="padding-top:20px">
+    <!-- Category Filters -->
+    <div class="map-controls">
+      <button class="filter-btn active" onclick="filterMap('ALL', this)">All</button>
+      <button class="filter-btn" onclick="filterMap('GATE', this)">🚧 Gates</button>
+      <button class="filter-btn" onclick="filterMap('PLANT', this)">🏭 Plant</button>
+      <button class="filter-btn" onclick="filterMap('SCHOOL', this)">🏫 Schools</button>
+      <button class="filter-btn" onclick="filterMap('HOSPITAL', this)">🏥 Hospital</button>
+      <button class="filter-btn" onclick="filterMap('BANK', this)">🏦 Banks</button>
+      <button class="filter-btn" onclick="filterMap('TEMPLE', this)">⛪ Religious</button>
+      <button class="filter-btn" onclick="filterMap('PARK', this)">🌳 Parks</button>
+      <button class="filter-btn" onclick="filterMap('CANTEEN', this)">☕ Canteens</button>
+      <input class="filter-btn search-input" type="text" id="loc-search" placeholder="Search location..." oninput="searchLocations(this.value)" style="border-radius:20px;padding:6px 14px"/>
+    </div>
+
+    <div class="split-layout">
+      <!-- MAP -->
+      <div>
+        <div id="map"></div>
+      </div>
+      <!-- LOCATION LIST -->
+      <div>
+        <div class="section-title" style="margin-bottom:10px">Locations List</div>
+        <div class="location-list" id="location-list">
+          <div class="loading-msg">Loading locations...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">VSP Smart Portal | RINL Vizag Steel | Internal Use Only</footer>
+</main>
+
+<script src="../js/api.js"></script>
+<script src="../js/app.js"></script>
+<script>
+feather.replace();
+
+const CAT_COLORS = {
+  GATE:'#f59e0b', PLANT:'#ef4444', SCHOOL:'#3b82f6', HOSPITAL:'#10b981',
+  BANK:'#8b5cf6', TEMPLE:'#ec4899', PARK:'#22c55e', CANTEEN:'#f97316',
+  SPORTS:'#06b6d4', OFFICE:'#64748b'
+};
+
+let allLocations = [];
+let markers = [];
+let map;
+
+function createIcon(cat) {
+  const color = CAT_COLORS[cat] || '#8b95a8';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
+    <path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 22 14 22S28 24.5 28 14C28 6.27 21.73 0 14 0z" fill="${color}"/>
+    <circle cx="14" cy="14" r="6" fill="white" opacity="0.9"/>
+  </svg>`;
+  return L.divIcon({
+    html: svg, className: '', iconSize: [28, 36], iconAnchor: [14, 36], popupAnchor: [0, -36]
+  });
+}
+
+async function initMap() {
+  map = L.map('map').setView([17.6875, 83.2190], 15);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 19
+  }).addTo(map);
+
+  try {
+    const res = await API.getLocations();
+    allLocations = res.data;
+    document.getElementById('loc-count').textContent = `${allLocations.length} locations loaded`;
+    renderMarkers(allLocations);
+    renderList(allLocations);
+  } catch (e) {
+    showToast('Failed to load locations', 'error');
+  }
+}
+
+function renderMarkers(locs) {
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+  locs.forEach(loc => {
+    const m = L.marker([loc.lat, loc.lng], { icon: createIcon(loc.category) })
+      .addTo(map)
+      .bindPopup(`
+        <div class="popup-name">${loc.name}</div>
+        <div class="popup-cat">${loc.category}</div>
+        <div class="popup-desc">${loc.description || ''}</div>
+      `);
+    markers.push(m);
+  });
+}
+
+function renderList(locs) {
+  const el = document.getElementById('location-list');
+  if (!locs.length) {
+    el.innerHTML = '<div class="loading-msg">No locations found</div>';
+    return;
+  }
+  el.innerHTML = locs.map((loc, i) => `
+    <div class="location-item" onclick="flyTo(${loc.lat}, ${loc.lng}, '${loc.name.replace(/'/,"\\'")}')">
+      <div>
+        <div class="location-name">${loc.name}</div>
+        <div class="location-desc">${loc.category} · ${loc.description ? loc.description.substring(0,60)+'...' : ''}</div>
+      </div>
+      <span class="badge" style="background:${CAT_COLORS[loc.category]}22;color:${CAT_COLORS[loc.category]};font-size:0.68rem">${loc.category}</span>
+    </div>
+  `).join('');
+}
+
+function flyTo(lat, lng, name) {
+  map.flyTo([lat, lng], 18, { duration: 1.2 });
+  const m = markers.find((mk, i) => {
+    const ll = mk.getLatLng();
+    return Math.abs(ll.lat - lat) < 0.0001 && Math.abs(ll.lng - lng) < 0.0001;
+  });
+  if (m) setTimeout(() => m.openPopup(), 1300);
+}
+
+function filterMap(cat, btn) {
+  document.querySelectorAll('.map-controls .filter-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const filtered = cat === 'ALL' ? allLocations : allLocations.filter(l => l.category === cat);
+  renderMarkers(filtered);
+  renderList(filtered);
+  if (filtered.length && map) {
+    const bounds = filtered.map(l => [l.lat, l.lng]);
+    map.fitBounds(bounds, { padding: [30, 30] });
+  }
+}
+
+function searchLocations(q) {
+  const term = q.toLowerCase();
+  const filtered = allLocations.filter(l =>
+    l.name.toLowerCase().includes(term) ||
+    (l.description || '').toLowerCase().includes(term) ||
+    l.category.toLowerCase().includes(term)
+  );
+  renderMarkers(filtered);
+  renderList(filtered);
+}
+
+initMap();
+</script>
+</body>
+</html>
