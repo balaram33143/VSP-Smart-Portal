@@ -4,9 +4,19 @@
  */
 
 const API = (() => {
-  const BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'http://localhost:8000'
-    : '';  // same origin in production
+  // Determine API base URL based on environment
+  let BASE;
+  
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    // Local development
+    BASE = 'http://localhost:8000';
+  } else if (window.API_BASE_URL) {
+    // Set by config.js or environment
+    BASE = window.API_BASE_URL;
+  } else {
+    // Production: same origin (or set VITE_API_URL env var during build)
+    BASE = window.location.origin;
+  }
 
   async function request(method, path, body = null) {
     const opts = {
