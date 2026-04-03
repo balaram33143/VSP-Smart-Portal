@@ -7,29 +7,44 @@ const API = (() => {
   // Determine API base URL based on environment
   let BASE;
   
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    // Local development
-    BASE = 'http://localhost:8000';
-  } else if (window.API_BASE_URL) {
-    // Set by config.js or environment
+  // First check if config.js already set it
+  if (window.API_BASE_URL && window.API_BASE_URL !== '{{API_BASE_URL}}') {
     BASE = window.API_BASE_URL;
-  } else {
-    // Production: same origin (or set VITE_API_URL env var during build)
+  } 
+  // Check hostname for localhost
+  else if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '') {
+    // Local development (file:// or localhost server)
+    BASE = 'http://localhost:8000';
+  }
+  // GitHub Pages or other production URL
+  else {
     BASE = window.location.origin;
   }
+  
+  console.log('🔌 API Connection - BASE URL:', BASE);
 
   async function request(method, path, body = null) {
+    const url = BASE + path;
     const opts = {
       method,
       headers: { 'Content-Type': 'application/json' },
     };
     if (body) opts.body = JSON.stringify(body);
-    const res = await fetch(BASE + path, opts);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(err.detail || 'Request failed');
+    
+    try {
+      const res = await fetch(url, opts);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        console.error(`❌ API Error [${method} ${path}]:`, err);
+        throw new Error(err.detail || `Request failed: ${res.status}`);
+      }
+      const data = await res.json();
+      console.log(`✅ API Success [${method} ${path}]:`, data);
+      return data;
+    } catch (error) {
+      console.error(`❌ API Request Failed [${method} ${url}]:`, error.message);
+      throw error;
     }
-    return res.json();
   }
 
   return {
