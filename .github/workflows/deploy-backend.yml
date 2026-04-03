@@ -1,0 +1,58 @@
+name: Deploy Backend to Railway
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
+      - 'docker-compose.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      # Install Railway CLI
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+      
+      # Deploy to Railway
+      - name: Deploy Backend to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          cd backend
+          railway up --detach
+      
+      # Get Railway App URL
+      - name: Get Railway App URL
+        id: railway_url
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          # This will be used to update frontend config
+          echo "Railway deployment initiated"
+          echo "RAILWAY_BACKEND_URL=your-railway-backend-url" >> $GITHUB_OUTPUT
+      
+      # Artifact the backend URL for frontend deployment
+      - name: Save Backend URL
+        run: |
+          mkdir -p deploy-info
+          echo "${{ steps.railway_url.outputs.RAILWAY_BACKEND_URL }}" > deploy-info/backend-url.txt
+
+      - name: Upload deployment info
+        uses: actions/upload-artifact@v3
+        with:
+          name: deploy-info
+          path: deploy-info/
+
+  # Notify frontend deployment
+  notify-frontend:
+    needs: deploy
+    uses: ./.github/workflows/deploy-frontend.yml
+    secrets: inherit

@@ -1,0 +1,87 @@
+name: Deploy Frontend to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'frontend/**'
+      - 'docs/**'
+      - '.github/workflows/deploy-frontend.yml'
+  workflow_call:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Download backend URL from previous deployment (if available)
+      - name: Download deployment info
+        continue-on-error: true
+        uses: actions/download-artifact@v3
+        with:
+          name: deploy-info
+
+      # Get Railway backend URL
+      - name: Get Backend URL
+        id: backend_url
+        run: |
+          if [ -f backend-url.txt ]; then
+            BACKEND_URL=$(cat backend-url.txt)
+          else
+            # Fallback to environment variable or default
+            BACKEND_URL="${{ secrets.RAILWAY_BACKEND_URL }}"
+          fi
+          echo "backend_url=${BACKEND_URL}" >> $GITHUB_OUTPUT
+          echo "🔗 Using backend URL: ${BACKEND_URL}"
+
+      # Update config.js with backend URL
+      - name: Update Frontend Config
+        run: |
+          BACKEND_URL="${{ steps.backend_url.outputs.backend_url }}"
+          
+          # Update frontend config.js
+          sed -i "s|{{API_BASE_URL}}|${BACKEND_URL}|g" frontend/js/config.js
+          sed -i "s|{{API_BASE_URL}}|${BACKEND_URL}|g" docs/js/config.js
+          
+          # Display the updated config
+          echo "✅ Updated config.js with backend URL:"
+          echo "Backend URL: ${BACKEND_URL}"
+
+      # Copy updated frontend to docs if needed
+      - name: Sync frontend to docs
+        run: |
+          cp -v frontend/index.html docs/index.html || true
+          cp -rv frontend/pages/* docs/pages/ || true
+          cp -rv frontend/js/config.js docs/js/config.js || true
+
+      # Setup Pages
+      - name: Setup Pages
+        uses: actions/configure-pages@v3
+
+      # Upload artifacts
+      - name: Upload pages artifact
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: 'docs'
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2

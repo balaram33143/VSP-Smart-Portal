@@ -1,0 +1,35 @@
+{
+  "id": "vsp-smart-portal",
+  "name": "VSP Smart Portal",
+  "description": "RINL Vizag Steel Smart Portal - Full Stack Deployment",
+  "runtime": "docker",
+  "dockerfile": "backend/Dockerfile",
+  "services": {
+    "backend": {
+      "runtime": "docker",
+      "dockerfile": "backend/Dockerfile",
+      "environment": {
+        "DB_HOST": "${{ DATABASE_HOST }}",
+        "DB_PORT": "${{ DATABASE_PORT }}",
+        "DB_USER": "${{ DATABASE_USER }}",
+        "DB_PASSWORD": "${{ DATABASE_PASSWORD }}",
+        "DB_NAME": "vsp_portal"
+      }
+    },
+    "mysql": {
+      "image": "mysql:8.0",
+      "environment": {
+        "MYSQL_ROOT_PASSWORD": "${{ MYSQL_ROOT_PASSWORD }}",
+        "MYSQL_DATABASE": "vsp_portal"
+      },
+      "volumes": [
+        "db-data:/var/lib/mysql"
+      ]
+    }
+  },
+  "volumes": {
+    "db-data": {
+      "driver": "local"
+    }
+  }
+}

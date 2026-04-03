@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Accident Report | VSP Smart Portal</title>
+<link rel="stylesheet" href="../css/style.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/feather-icons"></script>
+<style>
+.stats-row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+.acc-stat { background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:14px 20px; text-align:center; min-width:100px; }
+.acc-stat-val { font-family:'Rajdhani',sans-serif; font-size:2rem; font-weight:700; line-height:1; }
+.acc-stat-lbl { font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-top:4px; }
+.emergency-bar {
+  background:linear-gradient(90deg,rgba(239,68,68,0.2),rgba(239,68,68,0.05));
+  border:1px solid rgba(239,68,68,0.4);
+  border-radius:10px;
+  padding:14px 20px;
+  display:flex;
+  align-items:center;
+  gap:14px;
+  margin-bottom:20px;
+}
+.emergency-bar svg { color:var(--accent-red); width:24px; height:24px; flex-shrink:0; }
+.emergency-bar strong { color:#f87171; font-family:'Rajdhani',sans-serif; font-size:1.05rem; letter-spacing:0.5px; }
+.emergency-bar p { font-size:0.82rem; color:var(--text-secondary); margin-top:2px; }
+</style>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">⚙</div>
+    <div><div class="logo-title">VSP Portal</div><div class="logo-sub">RINL Vizag Steel</div></div>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="/" class="nav-item"><i data-feather="grid"></i><span>Dashboard</span></a>
+    <a href="/pages/map.html" class="nav-item"><i data-feather="map-pin"></i><span>Township Map</span></a>
+    <a href="/pages/machines.html" class="nav-item"><i data-feather="cpu"></i><span>Plant Status</span></a>
+    <a href="/pages/lostfound.html" class="nav-item"><i data-feather="search"></i><span>Lost & Found</span></a>
+    <a href="/pages/accident.html" class="nav-item active"><i data-feather="alert-triangle"></i><span>Accident Report</span></a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-time" id="clock">--:--:--</div>
+    <div class="sidebar-date" id="dateline"></div>
+  </div>
+</aside>
+
+<main class="main-content">
+  <header class="topbar">
+    <button class="menu-toggle" onclick="toggleSidebar()"><i data-feather="menu"></i></button>
+    <h1 class="page-title">Accident Reports</h1>
+    <div class="topbar-right">
+      <button class="btn btn-danger" onclick="openForm()">
+        <i data-feather="alert-triangle"></i> Report Accident
+      </button>
+    </div>
+  </header>
+
+  <div class="section" style="padding-top:20px">
+
+    <!-- Emergency Contact Bar -->
+    <div class="emergency-bar">
+      <i data-feather="phone-call"></i>
+      <div>
+        <strong>⚠ EMERGENCY CONTACTS</strong>
+        <p>Plant Fire Station: <strong style="color:var(--accent-red)">0891-2518999</strong> &nbsp;|&nbsp;
+           VSP Hospital: <strong style="color:var(--accent-red)">0891-2518911</strong> &nbsp;|&nbsp;
+           Security Control: <strong style="color:var(--accent-red)">0891-2518700</strong></p>
+      </div>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="stats-row" id="acc-stats">
+      <div class="loading-msg">Loading stats...</div>
+    </div>
+
+    <!-- REPORT FORM -->
+    <div class="form-card" id="report-form" style="display:none">
+      <div class="form-title" style="color:var(--accent-red)">🚨 Report Accident / Incident</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Reporter Name *</label>
+          <input type="text" id="f-reporter" placeholder="Full name"/>
+        </div>
+        <div class="form-group">
+          <label>Employee ID</label>
+          <input type="text" id="f-empid" placeholder="VSP-XXXXX"/>
+        </div>
+        <div class="form-group">
+          <label>Department</label>
+          <input type="text" id="f-dept" placeholder="e.g. Steel Making, Rolling"/>
+        </div>
+        <div class="form-group">
+          <label>Location *</label>
+          <input type="text" id="f-location" placeholder="e.g. SMS-I, Gate-2, BF Complex"/>
+        </div>
+        <div class="form-group">
+          <label>Accident Type *</label>
+          <select id="f-type">
+            <option value="NEAR_MISS">Near Miss</option>
+            <option value="MINOR_INJURY">Minor Injury</option>
+            <option value="MAJOR_INJURY">Major Injury</option>
+            <option value="PROPERTY_DAMAGE">Property Damage</option>
+            <option value="FIRE">Fire</option>
+            <option value="CHEMICAL">Chemical Incident</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Severity *</label>
+          <select id="f-severity">
+            <option value="LOW">Low</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="HIGH">High</option>
+            <option value="CRITICAL">Critical</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Incident Date *</label>
+          <input type="date" id="f-date"/>
+        </div>
+        <div class="form-group">
+          <label>Incident Time *</label>
+          <input type="time" id="f-time"/>
+        </div>
+        <div class="form-group">
+          <label>Number of Injured Persons</label>
+          <input type="number" id="f-injured" value="0" min="0"/>
+        </div>
+        <div class="form-group full">
+          <label>Description of Incident *</label>
+          <textarea id="f-desc" rows="4" placeholder="Describe what happened, sequence of events, immediate actions taken..."></textarea>
+        </div>
+        <div class="form-group">
+          <div class="checkbox-group">
+            <input type="checkbox" id="f-firstaid"/>
+            <label for="f-firstaid" style="text-transform:none;letter-spacing:0;font-size:0.88rem;font-weight:400">First Aid / Medical attention given</label>
+          </div>
+        </div>
+        <div class="form-group">
+          <div class="checkbox-group">
+            <input type="checkbox" id="f-supervisor"/>
+            <label for="f-supervisor" style="text-transform:none;letter-spacing:0;font-size:0.88rem;font-weight:400">Reported to supervisor / HOD</label>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="closeForm()">Cancel</button>
+        <button class="btn btn-danger" onclick="submitReport()"><i data-feather="send"></i> Submit Report</button>
+      </div>
+    </div>
+
+    <!-- FILTERS -->
+    <div class="filters">
+      <button class="filter-btn active" onclick="applyFilter({},this)">All</button>
+      <button class="filter-btn" onclick="applyFilter({status:'REPORTED'},this)">🔴 Reported</button>
+      <button class="filter-btn" onclick="applyFilter({status:'UNDER_INVESTIGATION'},this)">🟡 Investigating</button>
+      <button class="filter-btn" onclick="applyFilter({status:'RESOLVED'},this)">✅ Resolved</button>
+      <button class="filter-btn" onclick="applyFilter({severity:'CRITICAL'},this)">🚨 Critical</button>
+      <button class="filter-btn" onclick="applyFilter({severity:'HIGH'},this)">⚠ High</button>
+    </div>
+
+    <!-- TABLE -->
+    <div id="acc-table">
+      <div class="loading-msg"><div class="spinner"></div></div>
+    </div>
+
+  </div>
+
+  <footer class="footer">VSP Smart Portal | RINL Vizag Steel | Internal Use Only</footer>
+</main>
+
+<!-- Status Update Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Update Report Status</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="form-group" style="margin-bottom:20px">
+      <label>New Status</label>
+      <select id="modal-status">
+        <option value="REPORTED">Reported</option>
+        <option value="UNDER_INVESTIGATION">Under Investigation</option>
+        <option value="RESOLVED">Resolved</option>
+        <option value="CLOSED">Closed</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitStatusUpdate()"><i data-feather="save"></i> Update</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/config.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/app.js"></script>
+<script>
+feather.replace();
+
+let currentParams = {};
+let editingId = null;
+
+function openForm() {
+  const now = new Date();
+  document.getElementById('f-date').value = now.toISOString().slice(0,10);
+  document.getElementById('f-time').value = now.toTimeString().slice(0,5);
+  document.getElementById('report-form').style.display = 'block';
+  document.getElementById('report-form').scrollIntoView({ behavior:'smooth' });
+}
+
+function closeForm() {
+  document.getElementById('report-form').style.display = 'none';
+}
+
+async function submitReport() {
+  const data = {
+    reporter_name:          document.getElementById('f-reporter').value.trim(),
+    reporter_id:            document.getElementById('f-empid').value.trim(),
+    department:             document.getElementById('f-dept').value.trim(),
+    location_name:          document.getElementById('f-location').value.trim(),
+    accident_type:          document.getElementById('f-type').value,
+    severity:               document.getElementById('f-severity').value,
+    description:            document.getElementById('f-desc').value.trim(),
+    injured_persons:        parseInt(document.getElementById('f-injured').value) || 0,
+    first_aid_given:        document.getElementById('f-firstaid').checked,
+    reported_to_supervisor: document.getElementById('f-supervisor').checked,
+    incident_date:          document.getElementById('f-date').value,
+    incident_time:          document.getElementById('f-time').value + ':00',
+  };
+
+  if (!data.reporter_name || !data.location_name || !data.description || !data.incident_date) {
+    showToast('Please fill all required fields (*)', 'error');
+    return;
+  }
+
+  try {
+    await API.createAccident(data);
+    showToast('Accident report submitted. Safety team notified.', 'success');
+    closeForm();
+    ['f-reporter','f-empid','f-dept','f-location','f-desc'].forEach(id => document.getElementById(id).value = '');
+    loadReports(currentParams);
+    loadStats();
+  } catch (e) {
+    showToast('Submission failed: ' + e.message, 'error');
+  }
+}
+
+async function loadStats() {
+  try {
+    const s = await API.getAccidentStats();
+    document.getElementById('acc-stats').innerHTML = `
+      <div class="acc-stat"><div class="acc-stat-val">${s.total}</div><div class="acc-stat-lbl">Total Reports</div></div>
+      <div class="acc-stat"><div class="acc-stat-val" style="color:var(--accent-red)">${s.open}</div><div class="acc-stat-lbl">Open/Pending</div></div>
+      <div class="acc-stat"><div class="acc-stat-val" style="color:var(--accent-orange)">${s.critical}</div><div class="acc-stat-lbl">Critical/High</div></div>
+      <div class="acc-stat"><div class="acc-stat-val" style="color:var(--accent-yellow)">${s.injured}</div><div class="acc-stat-lbl">Total Injured</div></div>
+    `;
+  } catch {}
+}
+
+async function loadReports(params = {}) {
+  currentParams = params;
+  try {
+    const res = await API.getAccidents(params);
+    renderTable(res.data);
+  } catch {
+    document.getElementById('acc-table').innerHTML = '<div class="loading-msg">Failed to load data</div>';
+  }
+}
+
+function renderTable(items) {
+  const el = document.getElementById('acc-table');
+  if (!items.length) {
+    el.innerHTML = `<div class="empty-state"><i data-feather="check-circle"></i><h4>No records found</h4><p>No accident reports match your filter.</p></div>`;
+    feather.replace();
+    return;
+  }
+  el.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Reporter</th>
+            <th>Dept</th>
+            <th>Location</th>
+            <th>Type</th>
+            <th>Severity</th>
+            <th>Injured</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.map(r => `
+            <tr>
+              <td>${r.id}</td>
+              <td>
+                <div style="font-weight:500">${r.reporter_name}</div>
+                <div style="font-size:0.75rem;color:var(--text-muted)">${r.reporter_id || ''}</div>
+              </td>
+              <td style="font-size:0.82rem">${r.department || '—'}</td>
+              <td style="font-size:0.82rem">${r.location_name}</td>
+              <td style="font-size:0.8rem">${r.accident_type.replace(/_/g,' ')}</td>
+              <td>${badge(r.severity)}</td>
+              <td style="text-align:center">${r.injured_persons > 0 ? `<span style="color:var(--accent-red);font-weight:700">${r.injured_persons}</span>` : '0'}</td>
+              <td style="font-size:0.82rem">${formatDate(r.incident_date)}</td>
+              <td>${badge(r.status)}</td>
+              <td>
+                <button class="btn btn-ghost" style="padding:5px 10px;font-size:0.75rem" onclick="openModal(${r.id},'${r.status}')">
+                  <i data-feather="edit-2"></i>
+                </button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+  feather.replace();
+}
+
+function applyFilter(params, btn) {
+  document.querySelectorAll('.filters .filter-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  loadReports(params);
+}
+
+function openModal(id, status) {
+  editingId = id;
+  document.getElementById('modal-status').value = status;
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+async function submitStatusUpdate() {
+  try {
+    await API.updateAccStatus(editingId, document.getElementById('modal-status').value);
+    showToast('Status updated!', 'success');
+    closeModal();
+    loadReports(currentParams);
+    loadStats();
+  } catch (e) {
+    showToast('Failed: ' + e.message, 'error');
+  }
+}
+
+if (window.location.hash === '#report') openForm();
+
+loadStats();
+loadReports();
+</script>
+</body>
+</html>

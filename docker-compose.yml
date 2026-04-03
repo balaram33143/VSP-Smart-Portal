@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: vsp_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: vsp2026
+      MYSQL_DATABASE: vsp_portal
+      MYSQL_USER: vsp_user
+      MYSQL_PASSWORD: vsp2026
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-pvsp2026"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: vsp_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: vsp2026
+      DB_NAME: vsp_portal
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./frontend:/app/frontend
+
+volumes:
+  mysql_data:
