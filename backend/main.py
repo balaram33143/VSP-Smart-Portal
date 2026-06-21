@@ -7,18 +7,22 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-import mysql.connector
+import sqlite3
 import os
 from datetime import datetime, date
 from typing import Optional, List
 from pydantic import BaseModel
 import json
+from init_db import init_db
 
 app = FastAPI(
     title="VSP Smart Portal API",
     description="RINL Vizag Steel Plant Smart Portal Backend",
     version="1.0.0"
 )
+
+# ─── INITIALIZE DATABASE ─────────────────────────────────────
+init_db()
 
 # ─── CORS ────────────────────────────────────────────────────
 app.add_middleware(
@@ -29,26 +33,20 @@ app.add_middleware(
 )
 
 # ─── DB CONFIG ───────────────────────────────────────────────
-DB_CONFIG = {
-    "host":     os.getenv("DB_HOST", "localhost"),
-    "port":     int(os.getenv("DB_PORT", 3306)),
-    "user":     os.getenv("DB_USER", "root"),
-    "password": os.getenv("DB_PASSWORD", "vsp2026"),
-    "database": os.getenv("DB_NAME", "vsp_portal"),
-}
+DB_PATH = os.path.join(os.path.dirname(__file__), "..", "vsp_portal.db")
 
 def get_db():
-    return mysql.connector.connect(**DB_CONFIG)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
-def row_to_dict(cursor, row):
-    columns = [col[0] for col in cursor.description]
-    return dict(zip(columns, row))
+def row_to_dict(row):
+    return dict(row) if row else None
 
-def rows_to_list(cursor, rows):
-    columns = [col[0] for col in cursor.description]
+def rows_to_list(rows):
     result = []
     for row in rows:
-        d = dict(zip(columns, row))
+        d = dict(row)
         for k, v in d.items():
             if isinstance(v, (date, datetime)):
                 d[k] = str(v)
@@ -97,24 +95,27 @@ def health():
 # ─── LOCATIONS ───────────────────────────────────────────────
 @app.get("/api/locations")
 def get_locations(category: Optional[str] = None):
-    db = get_db()
-    cur = db.cursor()
-    if category:
-        cur.execute("SELECT * FROM locations WHERE category = %s ORDER BY name", (category.upper(),))
-    else:
-        cur.execute("SELECT * FROM locations ORDER BY category, name")
-    rows = rows_to_list(cur, cur.fetchall())
-    db.close()
-    return {"total": len(rows), "data": rows}
+    try:
+        db = get_db()
+        if category:
+            rows = db.execute("SELECT * FROM locations WHERE category = ? ORDER BY name", (category.upper(),)).fetchall()
+        else:
+            rows = db.execute("SELECT * FROM locations ORDER BY category, name").fetchall()
+        result = rows_to_list(rows)
+        db.close()
+        return {"total": len(result), "data": result}
+    except Exception as e:
+        raise HTTPException(500, f"Database error: {str(e)}")
 
 @app.get("/api/locations/categories")
 def get_categories():
-    db = get_db()
-    cur = db.cursor()
-    cur.execute("SELECT category, COUNT(*) as count FROM locations GROUP BY category ORDER BY category")
-    rows = cur.fetchall()
-    db.close()
-    return [{"category": r[0], "count": r[1]} for r in rows]
+    try:
+        db = get_db()
+        rows = db.execute("SELECT category, COUNT(*) as count FROM locations GROUP BY category ORDER BY category").fetchall()
+        db.close()
+        return [{"category": r[0], "count": r[1]} for r in rows]
+    except Exception as e:
+        raise HTTPException(500, f"Database error: {str(e)}")
 
 @app.get("/api/locations/{loc_id}")
 def get_location(loc_id: int):
@@ -134,25 +135,28 @@ def get_lostfound(
     item_type: Optional[str] = None,
     search: Optional[str] = None
 ):
-    db = get_db()
-    cur = db.cursor()
-    q = "SELECT * FROM lost_found WHERE 1=1"
-    params = []
-    if status:
-        q += " AND status = %s"
-        params.append(status.upper())
-    if item_type:
-        q += " AND item_type = %s"
-        params.append(item_type.upper())
-    if search:
-        q += " AND (item_name LIKE %s OR description LIKE %s OR location_name LIKE %s)"
-        like = f"%{search}%"
-        params += [like, like, like]
-    q += " ORDER BY created_at DESC"
-    cur.execute(q, params)
-    rows = rows_to_list(cur, cur.fetchall())
-    db.close()
-    return {"total": len(rows), "data": rows}
+    try:
+        db = get_db()
+        cur = db.cursor()
+        q = "SELECT * FROM lost_found WHERE 1=1"
+        params = []
+        if status:
+            q += " AND status = %s"
+            params.append(status.upper())
+        if item_type:
+            q += " AND item_type = %s"
+            params.append(item_type.upper())
+        if search:
+            q += " AND (item_name LIKE %s OR description LIKE %s OR location_name LIKE %s)"
+            like = f"%{search}%"
+            params += [like, like, like]
+        q += " ORDER BY created_at DESC"
+        cur.execute(q, params)
+        rows = rows_to_list(cur, cur.fetchall())
+        db.close()
+        return {"total": len(rows), "data": rows}
+    except Exception as e:
+        raise HTTPException(500, f"Database error: {str(e)}")
 
 @app.post("/api/lostfound", status_code=201)
 def create_lostfound(item: LostFoundCreate):
@@ -190,21 +194,24 @@ def delete_lostfound(item_id: int):
 # ─── ACCIDENT REPORTS ────────────────────────────────────────
 @app.get("/api/accidents")
 def get_accidents(status: Optional[str] = None, severity: Optional[str] = None):
-    db = get_db()
-    cur = db.cursor()
-    q = "SELECT * FROM accident_reports WHERE 1=1"
-    params = []
-    if status:
-        q += " AND status = %s"
-        params.append(status.upper())
-    if severity:
-        q += " AND severity = %s"
-        params.append(severity.upper())
-    q += " ORDER BY created_at DESC"
-    cur.execute(q, params)
-    rows = rows_to_list(cur, cur.fetchall())
-    db.close()
-    return {"total": len(rows), "data": rows}
+    try:
+        db = get_db()
+        cur = db.cursor()
+        q = "SELECT * FROM accident_reports WHERE 1=1"
+        params = []
+        if status:
+            q += " AND status = %s"
+            params.append(status.upper())
+        if severity:
+            q += " AND severity = %s"
+            params.append(severity.upper())
+        q += " ORDER BY created_at DESC"
+        cur.execute(q, params)
+        rows = rows_to_list(cur, cur.fetchall())
+        db.close()
+        return {"total": len(rows), "data": rows}
+    except Exception as e:
+        raise HTTPException(500, f"Database error: {str(e)}")
 
 @app.post("/api/accidents", status_code=201)
 def create_accident(report: AccidentReportCreate):
@@ -252,21 +259,24 @@ def accident_stats():
 # ─── MACHINES ────────────────────────────────────────────────
 @app.get("/api/machines")
 def get_machines(status: Optional[str] = None, department: Optional[str] = None):
-    db = get_db()
-    cur = db.cursor()
-    q = "SELECT * FROM machines WHERE 1=1"
-    params = []
-    if status:
-        q += " AND status = %s"
-        params.append(status.upper())
-    if department:
-        q += " AND department LIKE %s"
-        params.append(f"%{department}%")
-    q += " ORDER BY department, machine_name"
-    cur.execute(q, params)
-    rows = rows_to_list(cur, cur.fetchall())
-    db.close()
-    return {"total": len(rows), "data": rows}
+    try:
+        db = get_db()
+        cur = db.cursor()
+        q = "SELECT * FROM machines WHERE 1=1"
+        params = []
+        if status:
+            q += " AND status = %s"
+            params.append(status.upper())
+        if department:
+            q += " AND department LIKE %s"
+            params.append(f"%{department}%")
+        q += " ORDER BY department, machine_name"
+        cur.execute(q, params)
+        rows = rows_to_list(cur, cur.fetchall())
+        db.close()
+        return {"total": len(rows), "data": rows}
+    except Exception as e:
+        raise HTTPException(500, f"Database error: {str(e)}")
 
 @app.get("/api/machines/summary")
 def machine_summary():
@@ -299,34 +309,37 @@ def update_machine(machine_id: int, update: MachineStatusUpdate):
 # ─── DASHBOARD STATS ─────────────────────────────────────────
 @app.get("/api/dashboard")
 def dashboard():
-    db = get_db()
-    cur = db.cursor()
-    cur.execute("SELECT COUNT(*) FROM locations")
-    locs = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) FROM lost_found WHERE status = 'OPEN'")
-    lf_open = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) FROM accident_reports WHERE status = 'REPORTED'")
-    acc_open = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) FROM machines WHERE status = 'RUNNING'")
-    running = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) FROM machines WHERE status IN ('BREAKDOWN','MAINTENANCE')")
-    issues = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) FROM machines")
-    total_machines = cur.fetchone()[0]
-    db.close()
-    return {
-        "locations": locs,
-        "lostfound_open": lf_open,
-        "accidents_open": acc_open,
-        "machines_running": running,
-        "machines_issues": issues,
-        "machines_total": total_machines
-    }
+    try:
+        db = get_db()
+        cur = db.cursor()
+        cur.execute("SELECT COUNT(*) FROM locations")
+        locs = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM lost_found WHERE status = 'OPEN'")
+        lf_open = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM accident_reports WHERE status = 'REPORTED'")
+        acc_open = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM machines WHERE status = 'RUNNING'")
+        running = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM machines WHERE status IN ('BREAKDOWN','MAINTENANCE')")
+        issues = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM machines")
+        total_machines = cur.fetchone()[0]
+        db.close()
+        return {
+            "locations": locs,
+            "lostfound_open": lf_open,
+            "accidents_open": acc_open,
+            "machines_running": running,
+            "machines_issues": issues,
+            "machines_total": total_machines
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Database error: {str(e)}")
 
 # ─── SERVE FRONTEND ──────────────────────────────────────────
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(frontend_path):
-    app.mount("/static", StaticFiles(directory=os.path.join(frontend_path, "css")), name="css")
+    app.mount("/css", StaticFiles(directory=os.path.join(frontend_path, "css")), name="css")
     app.mount("/js", StaticFiles(directory=os.path.join(frontend_path, "js")), name="js")
     app.mount("/pages", StaticFiles(directory=os.path.join(frontend_path, "pages")), name="pages")
 
